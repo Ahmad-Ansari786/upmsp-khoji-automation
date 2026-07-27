@@ -167,7 +167,7 @@ def send_fcm_push_notification(notice_title, is_webpage_link):
 # =====================================================================
 def run_upmsp_pipeline():
     print(f"\n🌐 [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Connecting to official UPMSP Notice Portal...")
-    portal_url = "[https://upmsp.edu.in/](https://upmsp.edu.in/)"  
+    portal_url = "https://upmsp.edu.in/"  
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
