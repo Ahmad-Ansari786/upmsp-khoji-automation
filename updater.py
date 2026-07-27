@@ -9,26 +9,27 @@ from botocore.exceptions import NoCredentialsError
 import firebase_admin
 from firebase_admin import credentials, firestore, messaging
 from datetime import datetime
-import google.generativeai as genai
+from google import genai            # Naya import
+from google.genai import types      # Config ke liye naya import
 import json
 from json_repair import repair_json
 import time
-import pytz # इसे इंस्टॉल करना न भूलें: pip install pytz
+import pytz 
 
 # =====================================================================
 # ⚙️ FULL CONFIGURATION BLOCK (GitHub Secrets Encryption Layer)
 # =====================================================================
-# ADDED .strip() to clean any accidental newlines or spaces from GitHub Secrets
 CLOUDFLARE_ACCESS_KEY = os.environ.get("CF_ACCESS_KEY", "").strip()
 CLOUDFLARE_SECRET_KEY = os.environ.get("CF_SECRET_KEY", "").strip()
 CLOUDFLARE_ENDPOINT = os.environ.get("CF_ENDPOINT", "").strip()
 CLOUDFLARE_PUBLIC_BASE_URL = os.environ.get("CF_PUBLIC_URL", "").strip()
 CLOUDFLARE_BUCKET_NAME = os.environ.get("CF_BUCKET_NAME", "").strip()
 
-# 🌟 Gemini API Key Setup
+# 🌟 Gemini API Key Setup (Naya Tarika)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+client = None
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+    client = genai.Client(api_key=GEMINI_API_KEY)
 
 FIREBASE_SERVICE_ACCOUNT_JSON = "serviceAccountKey.json"
 
@@ -58,10 +59,9 @@ r2_client = boto3.client(
 # 🤖 GOOGLE AI (GEMINI) SUMMARY GENERATOR
 # =====================================================================
 def generate_ai_data(bytes_payload, mime_type, title):
-    if not GEMINI_API_KEY:
+    if not GEMINI_API_KEY or not client:
         return None
     
-    # फाइल साइज़ चेक (>18MB) ताकि Gemini API क्रैश न हो (आपके दूसरे स्क्रिप्ट का लॉजिक)
     if len(bytes_payload) > 18 * 1024 * 1024:
         print(f"⚠️ File is too large for inline AI processing (>18MB). Skipping AI extraction.")
         return None
@@ -85,19 +85,21 @@ def generate_ai_data(bytes_payload, mime_type, title):
     )
         
     try:
-        model = genai.GenerativeModel('gemini-3.1-flash-lite')
         prompt_input = [
             f"Notice Title Context: {title}", 
-            {"mime_type": mime_type, "data": bytes_payload}
+            {"mime_type": mime_type, "data": bytes_payload},
+            OPTIMIZED_PROMPT
         ]
 
-        # जेमिनी को JSON मोड में कॉल करना
-        ai_response = model.generate_content(
-            [OPTIMIZED_PROMPT] + prompt_input,
-            generation_config={"response_mime_type": "application/json"}
+        # जेमिनी को JSON मोड में कॉल करना (Naya SDK Method)
+        ai_response = client.models.generate_content(
+            model='gemini-3.1-flash-lite',
+            contents=prompt_input,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json"
+            )
         )
         
-        # रिपॉन्स को साफ़ करके पार्स करना
         raw_text = ai_response.text.strip()
         repaired_json_str = repair_json(raw_text)
         ai_data = json.loads(repaired_json_str)
@@ -165,7 +167,7 @@ def send_fcm_push_notification(notice_title, is_webpage_link):
 # =====================================================================
 def run_upmsp_pipeline():
     print(f"\n🌐 [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Connecting to official UPMSP Notice Portal...")
-    portal_url = "https://upmsp.edu.in/"  
+    portal_url = "[https://upmsp.edu.in/](https://upmsp.edu.in/)"  
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -188,11 +190,10 @@ def run_upmsp_pipeline():
     skip_count = 0
 
     for row in all_notice_rows:
-        # --- यहाँ IST Timezone हमेशा के लिए सेट करें ---
         ist_timezone = pytz.timezone('Asia/Kolkata')
         current_ist_time = datetime.now(ist_timezone)
         live_entry_date = current_ist_time.strftime("%d-%m-%Y")
-        # -----------------------------------------------
+        
         cells = row.find_all('td')
         if len(cells) < 4:
             continue  
@@ -204,19 +205,16 @@ def run_upmsp_pipeline():
         if not original_website_date:
             original_website_date = live_entry_date
 
-        # 🌟 SMART LINK EXTRACTOR
         links_to_process = []
 
         download_anchor = cells[3].find('a', href=True)
         if download_anchor:
-            # Normal Download Column Link
             links_to_process.append({
                 "title": cleaned_title,
                 "url": download_anchor['href'].strip(),
                 "is_sublink": False
             })
         else:
-            # Special Multi-Link Notices in Description
             description_anchors = cells[1].find_all('a', href=True)
             if description_anchors:
                 cell_html = str(cells[1])
@@ -248,7 +246,6 @@ def run_upmsp_pipeline():
             else:
                 continue 
 
-        # Process Extracted Links
         for link_data in links_to_process:
             href_link = link_data["url"]
             final_title = link_data["title"]
@@ -264,11 +261,10 @@ def run_upmsp_pipeline():
                 target_url = href_link
             else:
                 clean_path = href_link.lstrip('./')
-                target_url = "https://upmsp.edu.in/" + clean_path
+                target_url = "[https://upmsp.edu.in/](https://upmsp.edu.in/)" + clean_path
 
             file_name = target_url.split('/')[-1] if not is_webpage_link else "portal_link.pdf"
             
-            # Unique ID Generation logic updated for multi-links
             if is_webpage_link:
                 if is_sublink:
                     unique_str = f"{target_url}_{final_title}"
@@ -297,7 +293,6 @@ def run_upmsp_pipeline():
             
             cloudflare_permanent_url = target_url
             
-            # डिफ़ॉल्ट खाली डेटा, ताकि अगर वेबपेज हो या AI फेल हो जाए तो एरर न आए
             ai_extracted = {
                 "summary": "Portal link notice - please visit the portal for full details.",
                 "englishSummary": "",
@@ -317,10 +312,9 @@ def run_upmsp_pipeline():
                     content_type_header = get_smart_content_type(link_extension)
 
                     print("🧠 Running Full AI Document Extraction (OCR + Summaries)...")
-                    # नया फंक्शन कॉल किया
                     ai_result = generate_ai_data(bytes_payload, content_type_header, final_title)
                     if ai_result:
-                        ai_extracted.update(ai_result) # अगर सफलता मिली तो डिफ़ॉल्ट डेटा को ओवरराइट कर दें
+                        ai_extracted.update(ai_result) 
 
                     print(f"☁️ Pushing binary data to Cloudflare R2 [Mime: {content_type_header}]...")
                     r2_client.put_object(
@@ -353,8 +347,8 @@ def run_upmsp_pipeline():
                     "fileName": file_name if not is_webpage_link else "",
                     "date": live_entry_date,  
                     "originalWebsiteDate": original_website_date,  
-                    "ts_epoch": int(current_ist_time.timestamp()), # Typesense की फास्ट सॉर्टिंग के लिए
-                    "timestamp": firestore.SERVER_TIMESTAMP,     # Firestore के ओरिजिनल रिकॉर्ड के लिए
+                    "ts_epoch": int(current_ist_time.timestamp()), 
+                    "timestamp": firestore.SERVER_TIMESTAMP,     
                     "targetClass": "General", 
                     "department": "UPMSP Board Office",
                     "isTrade": False,
