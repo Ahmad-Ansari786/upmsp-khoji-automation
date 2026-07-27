@@ -72,7 +72,7 @@ def generate_ai_data(bytes_payload, mime_type, title):
         "### REQUIRED JSON SCHEMA:\n"
         "You must return a JSON object containing exactly these four keys:\n"
         "{\n"
-        "  \"summary\": \"A high-quality, dense 5-6 line(bullet poins) summary written in formal, professional HINDI (शुद्ध और प्रशासनिक हिंदी). It must capture the issuing authority, the exact core objective, critical dates/deadlines, and specific action items. Avoid vague sentences.\",\n"
+        "  \"summary\": \"A high-quality, dense 5-6 line (in bullet poins) summary written in formal, professional HINDI (शुद्ध और प्रशासनिक हिंदी). It must capture the issuing authority, the exact core objective, critical dates/deadlines, and specific action items. Avoid vague sentences.\",\n"
         "  \"englishSummary\": \"A detailed, high-quality 5-6 line summary in formal ENGLISH that perfectly mirrors the depth, context, and structural facts of the Hindi summary.\",\n"
         "  \"search_keywords\": [\"An array of exactly 12-18 highly relevant keywords, proper nouns, abbreviations, department names, and semantic search terms extracted directly from the text. Include both Hindi and English variations to optimize for downstream Typesense search index matching.\"],\n"
         "  \"fullText\": \"The absolute complete, verbatim text extraction (OCR) of the entire document from the first word to the last. Do not truncate, do not summarize, and do not skip any section, header, table, or footer. Capture everything precisely with exact text characters.\"\n"
@@ -261,7 +261,7 @@ def run_upmsp_pipeline():
                 target_url = href_link
             else:
                 clean_path = href_link.lstrip('./')
-                target_url = "[https://upmsp.edu.in/](https://upmsp.edu.in/)" + clean_path
+                target_url = "https://upmsp.edu.in/" + clean_path
 
             file_name = target_url.split('/')[-1] if not is_webpage_link else "portal_link.pdf"
             
