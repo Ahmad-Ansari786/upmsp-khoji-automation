@@ -1,5 +1,5 @@
 firebase-admin>=6.5.0
-google-generativeai>=0.7.0
+google-genai
 google-api-core>=2.19.0
 grpcio>=1.64.1
 requests
