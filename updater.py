@@ -397,7 +397,7 @@ def run_upmsp_pipeline():
                     "status": "published"
                 })
                 print(f"✅ SUCCESS: Complete Sync Saved for [{doc_id}]")
-                send_fcm_push_notification(final_title, is_webpage_link)
+                #send_fcm_push_notification(final_title, is_webpage_link)
                 success_count += 1
             except Exception as e:
                 print(f"❌ Database Transaction Crash: {e}")
