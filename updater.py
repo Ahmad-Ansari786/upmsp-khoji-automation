@@ -45,7 +45,7 @@ if not os.path.exists(FIREBASE_SERVICE_ACCOUNT_JSON):
 cred = credentials.Certificate(FIREBASE_SERVICE_ACCOUNT_JSON)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
-firestore_collection = db.collection("live_notices")
+firestore_collection = db.collection("test_notices")
 
 r2_client = boto3.client(
     service_name='s3',
