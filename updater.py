@@ -201,7 +201,7 @@ def send_fcm_push_notification(notice_title, is_webpage_link):
 # =====================================================================
 def run_upmsp_pipeline():
     print(f"\n🌐 [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Connecting to official UPMSP Notice Portal...")
-    portal_url = "[https://upmsp.edu.in/](https://upmsp.edu.in/)"  
+    portal_url = "https://upmsp.edu.in/"  
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -295,7 +295,7 @@ def run_upmsp_pipeline():
                 target_url = href_link
             else:
                 clean_path = href_link.lstrip('./')
-                target_url = "[https://upmsp.edu.in/](https://upmsp.edu.in/)" + clean_path
+                target_url = "https://upmsp.edu.in/" + clean_path
 
             file_name = target_url.split('/')[-1] if not is_webpage_link else "portal_link.pdf"
             
