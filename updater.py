@@ -86,10 +86,10 @@ def generate_ai_data(bytes_payload, mime_type, title):
         
     try:
         prompt_input = [
-            f"Notice Title Context: {title}", 
-            {"mime_type": mime_type, "data": bytes_payload},
-            OPTIMIZED_PROMPT
-        ]
+          f"Notice Title Context: {title}", 
+         types.Part.from_bytes(data=bytes_payload, mime_type=mime_type),
+         OPTIMIZED_PROMPT
+         ]
 
         # जेमिनी को JSON मोड में कॉल करना (Naya SDK Method)
         ai_response = client.models.generate_content(
