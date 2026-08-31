@@ -9,12 +9,14 @@ from botocore.exceptions import NoCredentialsError
 import firebase_admin
 from firebase_admin import credentials, firestore, messaging
 from datetime import datetime
-from google import genai            # Naya import
-from google.genai import types      # Config ke liye naya import
+from google import genai            
+from google.genai import types      
 import json
 from json_repair import repair_json
 import time
 import pytz 
+import io
+from pypdf import PdfReader, PdfWriter
 
 # =====================================================================
 # ⚙️ FULL CONFIGURATION BLOCK (GitHub Secrets Encryption Layer)
@@ -25,7 +27,7 @@ CLOUDFLARE_ENDPOINT = os.environ.get("CF_ENDPOINT", "").strip()
 CLOUDFLARE_PUBLIC_BASE_URL = os.environ.get("CF_PUBLIC_URL", "").strip()
 CLOUDFLARE_BUCKET_NAME = os.environ.get("CF_BUCKET_NAME", "").strip()
 
-# 🌟 Gemini API Key Setup (Naya Tarika)
+# 🌟 Gemini API Key Setup
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 client = None
 if GEMINI_API_KEY:
@@ -45,7 +47,7 @@ if not os.path.exists(FIREBASE_SERVICE_ACCOUNT_JSON):
 cred = credentials.Certificate(FIREBASE_SERVICE_ACCOUNT_JSON)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
-firestore_collection = db.collection("test_notices")
+firestore_collection = db.collection("live_notices")
 
 r2_client = boto3.client(
     service_name='s3',
@@ -58,13 +60,35 @@ r2_client = boto3.client(
 # =====================================================================
 # 🤖 GOOGLE AI (GEMINI) SUMMARY GENERATOR
 # =====================================================================
-def generate_ai_data(bytes_payload, mime_type, title):
+def generate_ai_data(bytes_payload, mime_type, title, max_retries=3):
     if not GEMINI_API_KEY or not client:
         return None
     
+    # 📝 Size Reduction Logic for Large Files
     if len(bytes_payload) > 18 * 1024 * 1024:
-        print(f"⚠️ File is too large for inline AI processing (>18MB). Skipping AI extraction.")
-        return None
+        if mime_type == 'application/pdf':
+            print("⚠️ PDF is > 18MB. Extracting the first 3 pages to reduce size for AI...")
+            try:
+                reader = PdfReader(io.BytesIO(bytes_payload))
+                writer = PdfWriter()
+                
+                pages_to_extract = min(3, len(reader.pages))
+                for page_num in range(pages_to_extract):
+                    writer.add_page(reader.pages[page_num])
+                
+                reduced_pdf_stream = io.BytesIO()
+                writer.write(reduced_pdf_stream)
+                bytes_payload = reduced_pdf_stream.getvalue()
+                
+                if len(bytes_payload) > 18 * 1024 * 1024:
+                    print("⚠️ Reduced PDF is still too large. Skipping AI extraction.")
+                    return None
+            except Exception as pdf_err:
+                print(f"⚠️ PDF size reduction failed: {pdf_err}")
+                return None
+        else:
+            print("⚠️ Image/File is too large (>18MB). Skipping AI extraction.")
+            return None
 
     OPTIMIZED_PROMPT = (
         "You are an elite, enterprise-grade Document Intelligence and OCR Specialist AI.\n"
@@ -84,30 +108,40 @@ def generate_ai_data(bytes_payload, mime_type, title):
         "4. Deep Scan Capability: Actively extract text from low-contrast, stamped, or handwritten elements typically found in scanned government orders or official notices."
     )
         
-    try:
-        prompt_input = [
-          f"Notice Title Context: {title}", 
-         types.Part.from_bytes(data=bytes_payload, mime_type=mime_type),
-         OPTIMIZED_PROMPT
-         ]
+    for attempt in range(max_retries):
+        try:
+            prompt_input = [
+                f"Notice Title Context: {title}", 
+                types.Part.from_bytes(data=bytes_payload, mime_type=mime_type),
+                OPTIMIZED_PROMPT
+            ]
 
-        # जेमिनी को JSON मोड में कॉल करना (Naya SDK Method)
-        ai_response = client.models.generate_content(
-            model='gemini-3.1-flash-lite',
-            contents=prompt_input,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
+            ai_response = client.models.generate_content(
+                model='gemini-3.1-flash-lite',
+                contents=prompt_input,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
             )
-        )
-        
-        raw_text = ai_response.text.strip()
-        repaired_json_str = repair_json(raw_text)
-        ai_data = json.loads(repaired_json_str)
-        return ai_data
+            
+            raw_text = ai_response.text.strip()
+            repaired_json_str = repair_json(raw_text)
+            ai_data = json.loads(repaired_json_str)
+            return ai_data
 
-    except Exception as e:
-        print(f"⚠️ Google AI Extraction Error: {e}")
-        return None
+        except Exception as e:
+            error_msg = str(e)
+            if "503" in error_msg or "UNAVAILABLE" in error_msg:
+                wait_time = (attempt + 1) * 5
+                print(f"⚠️ Server Busy (503). Retrying {attempt + 1}/{max_retries} in {wait_time} seconds...")
+                time.sleep(wait_time)
+                continue 
+            else:
+                print(f"⚠️ Google AI Extraction Error: {e}")
+                return None
+                
+    print(f"❌ Failed to extract AI data after {max_retries} attempts.")
+    return None
 
 # =====================================================================
 # 🛠️ HELPER PARSING FUNCTIONS (Data Security & Formatting)
@@ -167,7 +201,7 @@ def send_fcm_push_notification(notice_title, is_webpage_link):
 # =====================================================================
 def run_upmsp_pipeline():
     print(f"\n🌐 [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Connecting to official UPMSP Notice Portal...")
-    portal_url = "https://upmsp.edu.in/"  
+    portal_url = "[https://upmsp.edu.in/](https://upmsp.edu.in/)"  
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -261,7 +295,7 @@ def run_upmsp_pipeline():
                 target_url = href_link
             else:
                 clean_path = href_link.lstrip('./')
-                target_url = "https://upmsp.edu.in/" + clean_path
+                target_url = "[https://upmsp.edu.in/](https://upmsp.edu.in/)" + clean_path
 
             file_name = target_url.split('/')[-1] if not is_webpage_link else "portal_link.pdf"
             
@@ -363,7 +397,7 @@ def run_upmsp_pipeline():
                     "status": "published"
                 })
                 print(f"✅ SUCCESS: Complete Sync Saved for [{doc_id}]")
-                #send_fcm_push_notification(final_title, is_webpage_link)
+                send_fcm_push_notification(final_title, is_webpage_link)
                 success_count += 1
             except Exception as e:
                 print(f"❌ Database Transaction Crash: {e}")
