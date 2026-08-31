@@ -192,9 +192,9 @@ def send_fcm_push_notification(notice_title, is_webpage_link):
         )
         
         response = messaging.send(message)
-        #print(f"📢 STYLISH PUSH NOTIFICATION SENT SUCCESSFULLY -> Token ID: {response}")
+        print(f"📢 STYLISH PUSH NOTIFICATION SENT SUCCESSFULLY -> Token ID: {response}")
     except Exception as n_err:
-        #print(f"⚠️ Notification Dispatch System Error: {n_err}")
+        print(f"⚠️ Notification Dispatch System Error: {n_err}")
 
 # =====================================================================
 # 🎯 MAIN EXTRACTION ENGINE (Universal Link & Multi-File Handler)
