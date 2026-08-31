@@ -47,7 +47,7 @@ if not os.path.exists(FIREBASE_SERVICE_ACCOUNT_JSON):
 cred = credentials.Certificate(FIREBASE_SERVICE_ACCOUNT_JSON)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
-firestore_collection = db.collection("live_notices")
+firestore_collection = db.collection("test_notices")
 
 r2_client = boto3.client(
     service_name='s3',
@@ -353,7 +353,7 @@ def run_upmsp_pipeline():
                     print(f"☁️ Pushing binary data to Cloudflare R2 [Mime: {content_type_header}]...")
                     r2_client.put_object(
                         Bucket=CLOUDFLARE_BUCKET_NAME,
-                        Key=f"notices/{file_name}",
+                        Key=f"test_notices/{file_name}",
                         Body=bytes_payload,
                         ContentType=content_type_header
                     )
